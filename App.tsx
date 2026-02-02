@@ -4,16 +4,24 @@ import InputSection from './components/InputSection';
 import BankView from './components/BankView';
 import PaperView from './components/PaperView';
 import { geminiService } from './services/geminiService';
-import { AppState } from './types';
-import { SAMPLE_CDAP, SAMPLE_SYLLABUS, SAMPLE_TEMPLATE } from './constants';
+import { AppState, FacultySelection } from './types';
+import { getRandomSubjectSample } from './constants';
+
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     cdap: '',
     syllabus: '',
     template: '',
+    facultySelection: {
+      courseCode: '',
+      courseTitle: '',
+      ciaType: 'CIA-I',
+      qpType: 'QP-I'
+    },
     questionBank: null,
     questionPaper: null,
+    questionPaperData: null,
     isGenerating: false,
     activeTab: 'input',
     apiKey: null
@@ -29,17 +37,37 @@ const App: React.FC = () => {
   }, []);
 
   const handleLoadSample = () => {
+    const sample = getRandomSubjectSample();
     setState(prev => ({
       ...prev,
-      cdap: SAMPLE_CDAP,
-      syllabus: SAMPLE_SYLLABUS,
-      template: SAMPLE_TEMPLATE
+      cdap: sample.cdap,
+      syllabus: sample.syllabus,
+      template: sample.template,
+      facultySelection: {
+        courseCode: sample.courseCode,
+        courseTitle: sample.courseTitle,
+        ciaType: 'CIA-I',
+        qpType: 'QP-I'
+      }
+    }));
+  };
+
+
+  const handleFacultySelectionChange = (selection: Partial<FacultySelection>) => {
+    setState(prev => ({
+      ...prev,
+      facultySelection: { ...prev.facultySelection, ...selection }
     }));
   };
 
   const handleGenerate = async () => {
     if (!state.cdap || !state.syllabus || !state.template) {
       setError("Please fill in all input fields (CDAP, Syllabus, Template) or load sample data.");
+      return;
+    }
+
+    if (!state.facultySelection.courseCode || !state.facultySelection.courseTitle) {
+      setError("Please fill in Course Code and Course Title.");
       return;
     }
 
@@ -52,16 +80,35 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      // 1. Generate Question Bank
-      const bank = await geminiService.generateQuestionBank(state.cdap, state.syllabus, state.template);
-      
-      // 2. Generate Question Paper
-      const paper = await geminiService.generateQuestionPaper(bank, state.template, state.syllabus);
+      // 1. Generate Question Bank with CIA/QP constraints
+      const bank = await geminiService.generateQuestionBank(
+        state.cdap,
+        state.syllabus,
+        state.template,
+        state.facultySelection
+      );
+
+      // 2. Generate Question Paper (text format for preview)
+      const paper = await geminiService.generateQuestionPaper(
+        bank,
+        state.template,
+        state.syllabus,
+        state.facultySelection
+      );
+
+      // 3. Generate Question Paper Data (structured JSON for Word document)
+      const paperData = await geminiService.generateQuestionPaperData(
+        bank,
+        state.template,
+        state.syllabus,
+        state.facultySelection
+      );
 
       setState(prev => ({
         ...prev,
         questionBank: bank,
         questionPaper: paper,
+        questionPaperData: paperData,
         isGenerating: false,
         activeTab: 'bank'
       }));
@@ -87,36 +134,33 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
-             {/* Navigation Tabs */}
+            {/* Navigation Tabs */}
             <nav className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setState(s => ({ ...s, activeTab: 'input' }))}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  state.activeTab === 'input' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${state.activeTab === 'input' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
               >
                 Configuration
               </button>
               <button
                 onClick={() => setState(s => ({ ...s, activeTab: 'bank' }))}
                 disabled={!state.questionBank}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  state.activeTab === 'bank' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 disabled:opacity-50'
-                }`}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${state.activeTab === 'bank' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 disabled:opacity-50'
+                  }`}
               >
                 Question Bank
               </button>
               <button
                 onClick={() => setState(s => ({ ...s, activeTab: 'paper' }))}
                 disabled={!state.questionPaper}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  state.activeTab === 'paper' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 disabled:opacity-50'
-                }`}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${state.activeTab === 'paper' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 disabled:opacity-50'
+                  }`}
               >
                 Question Paper
               </button>
             </nav>
-            
+
             <button
               onClick={handleGenerate}
               disabled={state.isGenerating}
@@ -140,7 +184,7 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
+
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-3">
             <AlertCircle size={20} />
@@ -154,9 +198,11 @@ const App: React.FC = () => {
               cdap={state.cdap}
               syllabus={state.syllabus}
               template={state.template}
+              facultySelection={state.facultySelection}
               onCdapChange={(val) => setState(s => ({ ...s, cdap: val }))}
               onSyllabusChange={(val) => setState(s => ({ ...s, syllabus: val }))}
               onTemplateChange={(val) => setState(s => ({ ...s, template: val }))}
+              onFacultySelectionChange={handleFacultySelectionChange}
               onLoadSample={handleLoadSample}
             />
           )}
@@ -180,19 +226,19 @@ const App: React.FC = () => {
           {state.activeTab === 'paper' && state.questionPaper && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                 <div>
+                <div>
                   <h2 className="text-2xl font-bold text-gray-900">Question Paper Preview</h2>
                   <p className="text-gray-500 mt-1">Ready for printing or export</p>
                 </div>
-                 <div className="flex items-center gap-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
+                <div className="flex items-center gap-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
                   <FileText size={14} />
                   <span>Template Matched</span>
                 </div>
               </div>
-              <PaperView paperContent={state.questionPaper} />
+              <PaperView paperContent={state.questionPaper} paperData={state.questionPaperData} />
             </div>
           )}
-          
+
           {/* Empty States for output tabs */}
           {state.activeTab === 'bank' && !state.questionBank && (
             <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
@@ -203,7 +249,7 @@ const App: React.FC = () => {
           )}
 
           {state.activeTab === 'paper' && !state.questionPaper && (
-             <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+            <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
               <FileText className="mx-auto h-12 w-12 text-gray-300" />
               <h3 className="mt-2 text-sm font-semibold text-gray-900">No Paper Generated</h3>
               <p className="mt-1 text-sm text-gray-500">Go to Configuration and click "Generate All" to start.</p>

@@ -1,0 +1,39 @@
+=== PARAGRAPHS ===
+1: CIA-1
+5: PART - A (6 X 2 MARKS = 12 MARKS)
+7: PART - B (4 X 12 MARKS = 48 MARKS)
+
+=== TABLES ===
+
+Table 0: 1 rows x 16 cols
+  Row 0: ['REG No', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']
+
+Table 1: 4 rows x 4 cols
+  Row 0: ['DEPARTMENT', 'CSE', 'SEMESTER', 'IV']
+  Row 1: ['SECTION', 'A', 'DATE & SESSION', '2025-02-27 (FN)']
+  Row 2: ['DURATION', '120 Minutes', 'MAX MARKS', '60']
+  Row 3: ['COURSE CODE & NAME', 'CS302-Data Structures', 'CS302-Data Structures', 'CS302-Data Structures']
+
+Table 2: 7 rows x 5 cols
+  Row 0: ['Q.NO', 'Questions', 'CO', 'BTL', 'MARKS']
+  Row 1: ['1.', 'Define Abstract Data Type (ADT) and explain how it differs from a concrete data structure.', 'CO1', 'BTL2', '2']
+  Row 2: ['2.', 'Compare array-based and linked list-based implementations of lists in terms of memory usage and access time.', 'CO1', 'BTL3', '2']
+  Row 3: ['3.', 'What is a singly linked list? Draw a diagram showing a singly linked list with three nodes containing data values 10, 20, and 30.', 'CO1', 'BTL2', '2']
+  Row 4: ['4.', 'Define Stack ADT and list its basic operations.', 'CO2', 'BTL2', '2']
+  Row 5: ['5.', 'What is the difference between LIFO and FIFO principles? Which data structure follows which principle?', 'CO2', 'BTL2', '2']
+  Row 6: ['6.', 'Define Queue ADT and explain the operations enqueue and dequeue with examples.', 'CO2', 'BTL2', '2']
+
+Table 3: 13 rows x 5 cols
+  Row 0: ['Q.NO', 'Questions', 'CO', 'BTL', 'MARKS']
+  Row 1: ['7.(a)', 'Implement a singly linked list with operations for insertion at the beginning, insertion at the end, and deletion from the beginning. Write pseudocode or C++ code for these operations.', 'CO1', 'BTL3', '12']
+  Row 2: ['(OR)', '(OR)', '', '', '']
+  Row 3: ['7.(b)', 'Explain the process of polynomial manipulation using linked lists. How would you represent a polynomial like 5x^3 + 3x^2 + 2x + 7 using a linked list? Provide the node structure and explain the operations.', 'CO1', 'BTL3', '12']
+  Row 4: ['8.(a)', 'Write a program to evaluate a postfix expression using a stack. Provide the algorithm and trace through the example: 5 3 + 2 * 4 -.', 'CO2', 'BTL3', '12']
+  Row 5: ['(OR)', '(OR)', '', '', '']
+  Row 6: ['8.(b)', 'Explain the process of converting an infix expression to postfix notation. Convert the following infix expression to postfix: (A + B) * (C - D) / E. Show each step of the conversion process using the shunting-yard algorithm.', 'CO2', 'BTL3', '12']
+  Row 7: ['9.(a)', 'Write a C++ program to implement a doubly linked list with operations for insertion, deletion, and forward/backward traversal. Explain the advantages of doubly linked lists over singly linked lists in your implementation.', 'CO1', 'BTL4', '12']
+  Row 8: ['(OR)', '(OR)', '', '', '']
+  Row 9: ['9.(b)', 'Compare array-based and linked list-based implementations of the List ADT. Discuss the time and space complexity of insertion, deletion, and search operations for both implementations. Which implementation would you prefer for a scenario where frequent insertions and deletions occur at arbitrary positions?', 'CO1', 'BTL4', '12']
+  Row 10: ['10.(a)', 'Design and implement a queue using two stacks. Provide the enqueue and dequeue operations with their time complexities. Explain how this implementation works.', 'CO2', 'BTL3', '12']
+  Row 11: ['(OR)', '(OR)', '', '', '']
+  Row 12: ['10.(b)', 'Implement a circular queue with operations for enqueue, dequeue, and display. Write pseudocode or C++ code and explain how the circular queue handles the wraparound condition. Discuss the advantages of a circular queue over a linear queue.', 'CO2', 'BTL3', '12']
