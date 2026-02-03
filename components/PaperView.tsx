@@ -21,7 +21,7 @@ const PaperView: React.FC<PaperViewProps> = ({ paperContent, paperData }) => {
     setDownloadError(null);
 
     try {
-      const response = await fetch('/api/generate-docx', {
+      const response = await fetch('http://localhost:5000/api/generate-docx', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

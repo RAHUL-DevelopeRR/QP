@@ -3,6 +3,7 @@ import { Question, QuestionPaperData, FacultySelection } from "../types";
 /**
  * PerplexityService - Frontend service that calls Flask backend
  * NO API KEYS stored or used in frontend (secure architecture)
+ * All AI API calls are proxied through Flask backend
  */
 export class PerplexityService {
   /**

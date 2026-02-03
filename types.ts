@@ -63,7 +63,7 @@ export interface AppState {
   questionPaperData: QuestionPaperData | null;
   isGenerating: boolean;
   activeTab: 'input' | 'bank' | 'paper';
+  apiKey: string | null;
 }
-
 
 export type BloomLevel = 'Remember' | 'Understand' | 'Apply' | 'Analyze' | 'Evaluate' | 'Create';

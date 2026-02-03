@@ -12,10 +12,14 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: 'http://localhost:5000',
           changeOrigin: true,
-        }
-      }
+        },
+      },
     },
     plugins: [react()],
+    define: {
+      'process.env.API_KEY': JSON.stringify(env.PERPLEXITY_API_KEY),
+      'process.env.PERPLEXITY_API_KEY': JSON.stringify(env.PERPLEXITY_API_KEY)
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

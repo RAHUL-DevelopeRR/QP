@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Database, FileText, Layers, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import InputSection from './components/InputSection';
 import BankView from './components/BankView';
@@ -8,7 +8,7 @@ import { AppState, FacultySelection } from './types';
 import { getRandomSubjectSample } from './constants';
 
 
-const App = () => {
+const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     cdap: '',
     syllabus: '',
@@ -27,6 +27,8 @@ const App = () => {
   });
 
   const [error, setError] = useState<string | null>(null);
+
+  // Backend handles API key - no frontend check needed
 
   const handleLoadSample = () => {
     const sample = getRandomSubjectSample();
@@ -62,6 +64,8 @@ const App = () => {
       setError("Please fill in Course Code and Course Title.");
       return;
     }
+
+    // Backend handles API key validation
 
     setState(prev => ({ ...prev, isGenerating: true }));
     setError(null);
