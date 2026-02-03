@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, send_file, jsonify, send_from_directory
 from flask_cors import CORS
 import io
 import os
@@ -6,7 +6,7 @@ import os
 # Import the document generator
 from IDLE import create_exam_paper
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='dist')
 CORS(app)  # Enable CORS for React frontend
 
 @app.route('/api/generate-docx', methods=['POST'])
@@ -95,9 +95,27 @@ def health_check():
     return jsonify({"status": "ok", "message": "Server is running"})
 
 
+# Serve React App
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    """Serve React static files"""
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
+
+
 if __name__ == '__main__':
+    # Get port from environment variable (Railway) or default to 5000
+    port = int(os.environ.get('PORT', 5000))
+    
     print("🚀 Starting Flask API server...")
+    print(f"🌐 Port: {port}")
     print("📄 Document generation endpoint: POST /api/generate-docx")
     print("🏥 Health check endpoint: GET /api/health")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    
+    # Disable debug mode in production (Railway sets PORT env var)
+    debug_mode = os.environ.get('PORT') is None
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
