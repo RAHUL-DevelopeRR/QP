@@ -100,10 +100,23 @@ def health_check():
 @app.route('/<path:path>')
 def serve(path):
     """Serve React static files"""
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
+    try:
+        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+            return send_from_directory(app.static_folder, path)
+        else:
+            # Serve index.html for all routes (SPA routing)
+            index_path = os.path.join(app.static_folder, 'index.html')
+            if os.path.exists(index_path):
+                return send_from_directory(app.static_folder, 'index.html')
+            else:
+                return jsonify({
+                    "error": "Frontend not built",
+                    "message": "Please run 'npm run build' to create the dist folder",
+                    "static_folder": app.static_folder,
+                    "exists": os.path.exists(app.static_folder)
+                }), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
@@ -112,6 +125,16 @@ if __name__ == '__main__':
     
     print("🚀 Starting Flask API server...")
     print(f"🌐 Port: {port}")
+    print(f"📁 Static folder: {app.static_folder}")
+    print(f"📁 Static folder exists: {os.path.exists(app.static_folder)}")
+    
+    # Check if dist folder has content
+    if os.path.exists(app.static_folder):
+        files = os.listdir(app.static_folder)
+        print(f"📦 Static files: {files[:5]}..." if len(files) > 5 else f"📦 Static files: {files}")
+    else:
+        print("⚠️  WARNING: dist folder not found! Run 'npm run build' first")
+    
     print("📄 Document generation endpoint: POST /api/generate-docx")
     print("🏥 Health check endpoint: GET /api/health")
     print("=" * 50)
