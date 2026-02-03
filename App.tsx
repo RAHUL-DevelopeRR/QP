@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Database, FileText, Layers, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import InputSection from './components/InputSection';
 import BankView from './components/BankView';
@@ -8,7 +8,7 @@ import { AppState, FacultySelection } from './types';
 import { getRandomSubjectSample } from './constants';
 
 
-const App: React.FC = () => {
+const App = () => {
   const [state, setState] = useState<AppState>({
     cdap: '',
     syllabus: '',
@@ -23,18 +23,10 @@ const App: React.FC = () => {
     questionPaper: null,
     questionPaperData: null,
     isGenerating: false,
-    activeTab: 'input',
-    apiKey: null
+    activeTab: 'input'
   });
 
   const [error, setError] = useState<string | null>(null);
-
-  // Auto-detect API key from env or use prompt in a real app (here assuming env for demo)
-  useEffect(() => {
-    if (import.meta.env.VITE_API_KEY) {
-      setState(s => ({ ...s, apiKey: import.meta.env.VITE_API_KEY || null }));
-    }
-  }, []);
 
   const handleLoadSample = () => {
     const sample = getRandomSubjectSample();
@@ -68,11 +60,6 @@ const App: React.FC = () => {
 
     if (!state.facultySelection.courseCode || !state.facultySelection.courseTitle) {
       setError("Please fill in Course Code and Course Title.");
-      return;
-    }
-
-    if (!import.meta.env.VITE_API_KEY && !state.apiKey) {
-      setError("Missing API Key. Ensure VITE_API_KEY is set in .env.local file.");
       return;
     }
 
