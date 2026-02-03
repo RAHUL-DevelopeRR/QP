@@ -31,8 +31,8 @@ const App: React.FC = () => {
 
   // Auto-detect API key from env or use prompt in a real app (here assuming env for demo)
   useEffect(() => {
-    if (process.env.API_KEY) {
-      setState(s => ({ ...s, apiKey: process.env.API_KEY || null }));
+    if (import.meta.env.VITE_API_KEY) {
+      setState(s => ({ ...s, apiKey: import.meta.env.VITE_API_KEY || null }));
     }
   }, []);
 
@@ -71,8 +71,8 @@ const App: React.FC = () => {
       return;
     }
 
-    if (!process.env.API_KEY && !state.apiKey) {
-      setError("Missing API Key. Ensure process.env.API_KEY is set in the build environment.");
+    if (!import.meta.env.VITE_API_KEY && !state.apiKey) {
+      setError("Missing API Key. Ensure VITE_API_KEY is set in .env.local file.");
       return;
     }
 

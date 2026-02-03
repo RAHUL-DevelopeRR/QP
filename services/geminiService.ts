@@ -7,7 +7,7 @@ export class PerplexityService {
   private apiKey: string;
 
   constructor() {
-    this.apiKey = process.env.API_KEY || '';
+    this.apiKey = import.meta.env.VITE_API_KEY || '';
   }
 
   // Helper to re-initialize if key changes
