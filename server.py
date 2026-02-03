@@ -6,6 +6,42 @@ import json
 import requests
 import re
 
+# =============================================================================
+# ENVIRONMENT LOADING (must happen BEFORE Flask app creation)
+# =============================================================================
+# Load .env file for LOCAL development only
+# In production (Railway), environment variables are injected directly
+# Railway sets RAILWAY_ENVIRONMENT variable in production
+
+def load_environment():
+    """Load environment variables from .env file in local development."""
+    # Skip dotenv loading in Railway production
+    if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PROJECT_ID'):
+        print("🚂 Running on Railway - using injected environment variables")
+        return
+    
+    # Local development: try to load .env.local or .env
+    try:
+        from dotenv import load_dotenv
+        
+        # Check for .env.local first (Vite convention), then .env
+        env_file = None
+        if os.path.exists('.env.local'):
+            env_file = '.env.local'
+        elif os.path.exists('.env'):
+            env_file = '.env'
+        
+        if env_file:
+            load_dotenv(env_file, override=True)
+            print(f"📄 Loaded environment from {env_file}")
+        else:
+            print("⚠️  No .env file found (create .env.local with API_KEY=your-key)")
+    except ImportError:
+        print("⚠️  python-dotenv not installed (run: pip install python-dotenv)")
+
+# Load environment BEFORE creating Flask app
+load_environment()
+
 # Import the document generator
 from IDLE import create_exam_paper
 
