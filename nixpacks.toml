@@ -3,7 +3,7 @@ nixPkgs = ['python310', 'nodejs_20']
 
 [phases.install]
 cmds = [
-  'npm install',
+  'npm ci --include=dev',
   'pip install -r requirements.txt'
 ]
 
@@ -12,3 +12,4 @@ cmds = ['npm run build']
 
 [start]
 cmd = 'python server.py'
+
