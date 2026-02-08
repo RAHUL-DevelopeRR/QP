@@ -23,6 +23,9 @@ export interface Question {
   btl: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   type: 'Theory' | 'Problem' | 'Diagram' | 'Numerical';
+  hasDiagram?: boolean;
+  diagramType?: string;
+  diagramDescription?: string;
 }
 
 export interface QuestionBankData {
@@ -36,6 +39,13 @@ export interface QuestionItem {
   co: string;
   btl: string;
   marks: string;
+  hasDiagram?: boolean;
+  diagramType?: string;
+  diagramDescription?: string;
+  diagramImageUrl?: string;
+  // 'input' = diagram shown to student (e.g., "Given this tree, perform DFS")
+  // 'output' = student draws the diagram (e.g., "Draw a parse tree for...")
+  diagramRole?: 'input' | 'output';
 }
 
 // Structured question paper data for Word document generation

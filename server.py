@@ -57,21 +57,124 @@ PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions'
 
 SYSTEM_PROMPT = """You are an expert academic question paper generator for M. Kumarasamy College of Engineering, following Anna University exam patterns strictly.
 
+🌐 WEB-ASSISTED CONTENT FETCHING (ENABLED)
+You are allowed and encouraged to search the web for:
+- Anna University previous year question papers
+- University question banks and exam archives
+- Educational websites and open course materials
+- Standard textbook problems and examples
+- Public lecture notes with diagram-based problems
+
+RULES FOR WEB USAGE:
+1. Use web content for reference and structure only - adapt and reframe to match syllabus
+2. Do NOT copy questions verbatim - rewrite with original phrasing
+3. Ensure fetched content matches the given unit boundaries and cognitive level
+4. Do NOT include URLs, citations, or source names in generated questions
+
+📐 DIAGRAM-BASED QUESTION RULES
+When a topic requires visualization, you MUST include diagram-based questions:
+- Data Structures: Binary trees, AVL trees, B+ trees, heaps, graphs, linked lists
+- Operating Systems: Process state diagrams, paging/segmentation, Gantt charts, disk scheduling
+- DBMS: ER diagrams, relational schemas, B+ trees, precedence graphs, normalization diagrams
+- Computer Networks: OSI layers, network topologies, timing diagrams, packet formats
+- Algorithms: Recursion trees, state space trees, flowcharts, DP tables
+- Compiler Design: NFA/DFA diagrams, parse trees, syntax trees, flow graphs
+- AI: Game trees, search trees, neural network diagrams, decision trees
+
+DIAGRAM QUESTION REQUIREMENTS:
+1. Only 1-2 Part B questions should require diagram interaction (not mandatory)
+2. Diagram questions must include clear instructions (e.g., "Draw and label the AVL tree after inserting...")
+3. Include traversal/execution/analysis tasks with diagrams
+4. Provide structured diagram descriptions for complex visualizations
+
+🎯 BLOOM'S TAXONOMY COGNITIVE LEVELS
+Match questions to the required level:
+- BTL1 (Remember): Define, List, State, Identify, Draw basic diagrams
+- BTL2 (Understand): Explain, Describe, Illustrate with diagram, Compare
+- BTL3 (Apply): Solve, Calculate, Trace algorithm, Construct diagram step-by-step
+- BTL4 (Analyze): Analyze, Deduce, Compare with justification, Detect properties from diagram
+- BTL5 (Evaluate): Evaluate, Validate, Optimize, Assess with reasoning
+- BTL6 (Create): Design, Formulate, Synthesize, Create new solution
+
 CRITICAL RULES:
 1. Questions must be academically rigorous and examination-appropriate
 2. Each question must have clear CO (Course Outcome) and BTL (Bloom's Taxonomy Level) mapping
 3. Generate questions strictly from the provided syllabus topics ONLY
 4. Never create questions outside the given unit boundaries
-5. Ensure variety in question types (Define, Explain, Compare, Analyze, Design, Evaluate)
+5. Ensure variety in question types with emphasis on diagram-based and problem-solving
 6. Match the difficulty distribution specified in the template"""
 
 
 def get_api_key():
-    """Get API key from environment."""
+    """Get Perplexity API key from environment."""
     api_key = os.environ.get('API_KEY')
     if not api_key:
         raise ValueError("API_KEY not configured in environment")
     return api_key
+
+
+def get_gemini_api_key():
+    """Get Gemini API key from environment."""
+    api_key = os.environ.get('GEMINI_API_KEY')
+    if not api_key:
+        print("⚠️ GEMINI_API_KEY not configured - falling back to Perplexity only")
+        return None
+    return api_key
+
+
+# =============================================================================
+# GEMINI API CONFIGURATION
+# =============================================================================
+GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+
+
+def call_gemini_api(prompt: str, use_web_search: bool = False) -> str:
+    """Call Gemini API with the given prompt. Supports web search via Google Search grounding."""
+    api_key = get_gemini_api_key()
+    if not api_key:
+        return None
+    
+    url = f"{GEMINI_API_URL}?key={api_key}"
+    
+    headers = {
+        'Content-Type': 'application/json',
+    }
+    
+    # Build the request payload
+    payload = {
+        'contents': [{
+            'parts': [{'text': f"{SYSTEM_PROMPT}\n\n{prompt}"}]
+        }],
+        'generationConfig': {
+            'temperature': 0.4,
+            'maxOutputTokens': 16000,
+        }
+    }
+    
+    # Add Google Search grounding for web search
+    if use_web_search:
+        payload['tools'] = [{
+            'googleSearch': {}
+        }]
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=180)
+        response.raise_for_status()
+        
+        data = response.json()
+        if 'candidates' in data and len(data['candidates']) > 0:
+            candidate = data['candidates'][0]
+            if 'content' in candidate and 'parts' in candidate['content']:
+                return candidate['content']['parts'][0].get('text', '')
+        
+        print(f"⚠️ Gemini API returned unexpected format: {data}")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ Gemini API error: {e}")
+        return None
+    except Exception as e:
+        print(f"⚠️ Gemini API unexpected error: {e}")
+        return None
 
 
 def call_perplexity_api(prompt: str) -> str:
@@ -90,36 +193,144 @@ def call_perplexity_api(prompt: str) -> str:
             {'role': 'user', 'content': prompt}
         ],
         'temperature': 0.4,
-        'max_tokens': 8000,
+        'max_tokens': 16000,
     }
     
-    response = requests.post(PERPLEXITY_API_URL, json=payload, headers=headers, timeout=120)
+    response = requests.post(PERPLEXITY_API_URL, json=payload, headers=headers, timeout=180)
     response.raise_for_status()
     
     data = response.json()
     return data['choices'][0]['message']['content']
 
 
+def call_combined_api(prompt: str, use_web_search: bool = False) -> str:
+    """
+    Call both Gemini and Perplexity APIs and combine responses.
+    - Gemini: 70% weight (primary)
+    - Perplexity: 30% weight (supplementary)
+    - For diagram questions: Use only Gemini with web search
+    """
+    gemini_response = None
+    perplexity_response = None
+    
+    # Try Gemini first (70% weight, primary source)
+    try:
+        gemini_response = call_gemini_api(prompt, use_web_search=use_web_search)
+        if gemini_response:
+            print("✅ Gemini API responded successfully")
+    except Exception as e:
+        print(f"⚠️ Gemini failed: {e}")
+    
+    # If using web search (diagram questions), use only Gemini
+    if use_web_search and gemini_response:
+        return gemini_response
+    
+    # Try Perplexity (30% weight, supplementary)
+    try:
+        perplexity_response = call_perplexity_api(prompt)
+        if perplexity_response:
+            print("✅ Perplexity API responded successfully")
+    except Exception as e:
+        print(f"⚠️ Perplexity failed: {e}")
+    
+    # If only one API responded, use that
+    if gemini_response and not perplexity_response:
+        return gemini_response
+    if perplexity_response and not gemini_response:
+        return perplexity_response
+    
+    # Both responded - prioritize Gemini (it's the primary source at 70%)
+    # For JSON responses, we should use one complete response, not mix
+    # Use Gemini as the primary source
+    if gemini_response:
+        return gemini_response
+    
+    return perplexity_response
+
+
 def extract_json(text: str) -> str:
-    """Extract JSON from AI response."""
+    """Extract JSON from AI response - improved parsing with truncation handling."""
     import re
     
     # Try to extract from markdown code block
     json_match = re.search(r'```json\s*([\s\S]*?)\s*```', text)
     if json_match:
-        return json_match.group(1).strip()
+        return repair_json(json_match.group(1).strip())
     
-    # Try to find array directly
-    array_match = re.search(r'\[[\s\S]*\]', text)
-    if array_match:
-        return array_match.group(0)
+    # Try to find array - use bracket counting for precise extraction
+    start_idx = text.find('[')
+    if start_idx != -1:
+        bracket_count = 0
+        last_complete_idx = start_idx
+        for i, char in enumerate(text[start_idx:], start_idx):
+            if char == '[':
+                bracket_count += 1
+            elif char == ']':
+                bracket_count -= 1
+                if bracket_count == 0:
+                    return repair_json(text[start_idx:i+1])
+            # Track last complete object for recovery
+            if char == '}' and bracket_count == 1:
+                last_complete_idx = i
+        
+        # If we get here, JSON is truncated - try to recover
+        if bracket_count > 0 and last_complete_idx > start_idx:
+            # Close the array after last complete object
+            partial_json = text[start_idx:last_complete_idx+1] + ']'
+            print(f"⚠️ JSON was truncated, recovered {partial_json.count('{')//2} questions")
+            return repair_json(partial_json)
     
-    # Try to find object directly
-    object_match = re.search(r'\{[\s\S]*\}', text)
-    if object_match:
-        return object_match.group(0)
+    # Try to find object - use brace counting
+    start_idx = text.find('{')
+    if start_idx != -1:
+        brace_count = 0
+        for i, char in enumerate(text[start_idx:], start_idx):
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    return repair_json(text[start_idx:i+1])
+        
+        # If truncated, try to close braces
+        if brace_count > 0:
+            partial_json = text[start_idx:] + '}' * brace_count
+            return repair_json(partial_json)
     
     return text
+
+
+def repair_json(json_str: str) -> str:
+    """Repair common JSON formatting issues from AI responses."""
+    import re
+    
+    # First, try to parse as-is
+    try:
+        json.loads(json_str)
+        return json_str
+    except json.JSONDecodeError:
+        pass
+    
+    # Fix: Missing commas between objects in array (}{ -> },{)
+    json_str = re.sub(r'\}\s*\{', '},{', json_str)
+    
+    # Fix: Missing commas between key-value pairs (""  " -> "", ")
+    json_str = re.sub(r'"\s*\n\s*"', '",\n"', json_str)
+    
+    # Fix: Missing commas after values ("value"  "key" -> "value", "key")
+    json_str = re.sub(r'"\s+("[\w]+":)', r'", \1', json_str)
+    
+    # Fix: Trailing commas before closing brackets
+    json_str = re.sub(r',\s*\]', ']', json_str)
+    json_str = re.sub(r',\s*\}', '}', json_str)
+    
+    # Fix: Missing comma after boolean/number before next key
+    json_str = re.sub(r'(true|false|\d+)\s*\n\s*"', r'\1,\n"', json_str)
+    
+    # Fix: Missing comma after closing quote before next key
+    json_str = re.sub(r'"\s*\n\s*"(\w+)":', r'",\n"\1":', json_str)
+    
+    return json_str
 
 
 def get_cia_constraints(faculty_selection: dict) -> str:
@@ -195,31 +406,50 @@ def generate_bank():
 {constraints}
 
 TASK:
-Generate a comprehensive Question Bank for {cia_type}.
+Generate a Question Bank for {cia_type} with exactly 20 questions total.
 Return ONLY a valid JSON array of objects with NO markdown formatting.
-Generate at least 8 questions for Part A (2 marks) and 6 questions for Part B (12 or 16 marks).
+
+QUESTION DISTRIBUTION:
+- Part A (2 marks): 10 questions (5 per CO)
+- Part B (12/16 marks): 10 questions (5 per CO)
+
+REQUIREMENTS:
+1. Include 2-3 diagram-based questions
+2. Include 3-4 numerical/problem-solving questions
+3. Mix difficulty levels appropriately
 
 STRICT RULES:
 - Only use Units: {', '.join(map(str, units))}
 - Only use COs: {', '.join(cos)}
 
+QUESTION TYPES BY BTL LEVEL:
+- BTL1 (Remember): Definition, Match the following, Formula recall, Diagram labeling, Tabulate, Identify from a drawing, Description
+- BTL2 (Understand): Classification, Compare/Contrast/Differentiate, Examine/Explain, Give examples, Identify modification and justify, Use Cases, Real-time application
+- BTL3 (Apply): Application problem, Case Study, Experimental arrangement, Divide system into use and justify, Identify by describing application
+- BTL4 (Analyze): Analysis with validation, Deduce steps for application, Case study analysis, Deconstruct experiment, Modification to solve
+- BTL5 (Evaluate): Analyze system and component, Write conclusions from comparison, Review/Test/Validate, Evaluate design and explain, Problem evaluation with results
+- BTL6 (Create): Design new system, Hypothesis formulation, Integrate and formulate design, Synthesize and justify design
+
 Each question object must have these exact fields:
 {{
   "id": "string (unique identifier like Q1, Q2, etc.)",
-  "text": "string (the question text)",
+  "text": "string (the question text - for diagram questions include specific drawing instructions)",
   "marks": number (2 for Part A, 12 or 16 for Part B/C),
   "unit": number ({' or '.join(map(str, units))} ONLY),
   "topic": "string",
   "subtopic": "string",
   "co": "string ({' or '.join(cos)} ONLY)",
-  "btl": "string (BTL1, BTL2, etc.)",
+  "btl": "string (BTL1, BTL2, BTL3, BTL4, BTL5, or BTL6)",
   "difficulty": "Easy" | "Medium" | "Hard",
-  "type": "Theory" | "Problem" | "Diagram" | "Numerical"
+  "type": "string (must be one of the types listed above matching the BTL level)",
+  "hasDiagram": boolean (true if question requires drawing/analyzing a diagram),
+  "diagramType": "string (e.g., 'Binary Tree', 'ER Diagram', 'Flowchart', 'State Diagram', 'Graph', 'Table', 'Timing Diagram', 'None')",
+  "diagramDescription": "string (brief description of the diagram to be drawn, or 'N/A' if no diagram)"
 }}
 
 Return ONLY the JSON array, no explanation or markdown."""
         
-        result = call_perplexity_api(prompt)
+        result = call_combined_api(prompt)
         json_str = extract_json(result)
         questions = json.loads(json_str)
         
@@ -429,6 +659,14 @@ Generate structured question paper data as JSON for Word document generation.
 6. Return ONLY valid JSON with NO markdown
 7. For OR rows: {{"qno": "(OR)", "question": "(OR)", "co": "", "btl": "", "marks": ""}}
 8. Question numbers: 7.(a), 7.(b), 8.(a), 8.(b), etc.
+9. IMPORTANT: For Part B and Part C questions, include diagram fields:
+   - hasDiagram: true/false (true if question involves a diagram in any way)
+   - diagramType: "Gantt Chart", "Binary Tree", "Graph", "State Diagram", "ER Diagram", "Flowchart", "Table", "Parse Tree", "DFA/NFA", or "None"
+   - diagramDescription: Brief description (e.g., "Binary tree with nodes A,B,C,D,E")
+   - diagramRole: "input" or "output"
+     * "input" = Question PROVIDES a diagram for student to analyze (e.g., "Given this tree, perform DFS", "For the given Gantt chart, calculate...")
+     * "output" = Student DRAWS the diagram (e.g., "Draw a parse tree for...", "Construct a DFA for...")
+10. At most 1-2 Part B questions should have hasDiagram: true
 
 Return JSON object with this structure:
 {{
@@ -520,6 +758,188 @@ def generate_docx():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/generate-diagram', methods=['POST'])
+def generate_diagram():
+    """Generate SVG diagram based on diagram type and description."""
+    try:
+        data = request.get_json()
+        diagram_type = data.get('diagramType', 'Generic')
+        description = data.get('description', '')
+        
+        # Generate simple SVG placeholder diagrams based on type
+        svg_templates = {
+            'Gantt Chart': '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 150">
+                <rect fill="#f8f9fa" width="400" height="150"/>
+                <text x="200" y="20" text-anchor="middle" font-size="12" font-weight="bold">Gantt Chart</text>
+                <line x1="50" y1="35" x2="50" y2="130" stroke="#333" stroke-width="2"/>
+                <line x1="50" y1="130" x2="380" y2="130" stroke="#333" stroke-width="2"/>
+                <rect x="60" y="45" width="80" height="20" fill="#4CAF50" rx="3"/>
+                <text x="100" y="59" text-anchor="middle" font-size="9" fill="white">P1</text>
+                <rect x="140" y="70" width="60" height="20" fill="#2196F3" rx="3"/>
+                <text x="170" y="84" text-anchor="middle" font-size="9" fill="white">P2</text>
+                <rect x="200" y="95" width="100" height="20" fill="#FF9800" rx="3"/>
+                <text x="250" y="109" text-anchor="middle" font-size="9" fill="white">P3</text>
+                <text x="60" y="145" font-size="8">0</text>
+                <text x="140" y="145" font-size="8">4</text>
+                <text x="200" y="145" font-size="8">7</text>
+                <text x="300" y="145" font-size="8">12</text>
+            </svg>''',
+            'Binary Tree': '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200">
+                <rect fill="#f8f9fa" width="300" height="200"/>
+                <text x="150" y="20" text-anchor="middle" font-size="12" font-weight="bold">Binary Tree</text>
+                <line x1="150" y1="55" x2="90" y2="95" stroke="#333" stroke-width="2"/>
+                <line x1="150" y1="55" x2="210" y2="95" stroke="#333" stroke-width="2"/>
+                <line x1="90" y1="115" x2="60" y2="155" stroke="#333" stroke-width="2"/>
+                <line x1="90" y1="115" x2="120" y2="155" stroke="#333" stroke-width="2"/>
+                <line x1="210" y1="115" x2="180" y2="155" stroke="#333" stroke-width="2"/>
+                <line x1="210" y1="115" x2="240" y2="155" stroke="#333" stroke-width="2"/>
+                <circle cx="150" cy="45" r="18" fill="#4CAF50"/>
+                <text x="150" y="50" text-anchor="middle" font-size="12" fill="white">50</text>
+                <circle cx="90" cy="105" r="18" fill="#2196F3"/>
+                <text x="90" y="110" text-anchor="middle" font-size="12" fill="white">30</text>
+                <circle cx="210" cy="105" r="18" fill="#2196F3"/>
+                <text x="210" y="110" text-anchor="middle" font-size="12" fill="white">70</text>
+                <circle cx="60" cy="165" r="15" fill="#FF9800"/>
+                <text x="60" y="169" text-anchor="middle" font-size="10" fill="white">20</text>
+                <circle cx="120" cy="165" r="15" fill="#FF9800"/>
+                <text x="120" y="169" text-anchor="middle" font-size="10" fill="white">40</text>
+                <circle cx="180" cy="165" r="15" fill="#FF9800"/>
+                <text x="180" y="169" text-anchor="middle" font-size="10" fill="white">60</text>
+                <circle cx="240" cy="165" r="15" fill="#FF9800"/>
+                <text x="240" y="169" text-anchor="middle" font-size="10" fill="white">80</text>
+            </svg>''',
+            'Graph': '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200">
+                <rect fill="#f8f9fa" width="300" height="200"/>
+                <text x="150" y="20" text-anchor="middle" font-size="12" font-weight="bold">Graph</text>
+                <line x1="80" y1="70" x2="150" y2="50" stroke="#333" stroke-width="2"/>
+                <line x1="150" y1="50" x2="220" y2="70" stroke="#333" stroke-width="2"/>
+                <line x1="80" y1="70" x2="80" y2="140" stroke="#333" stroke-width="2"/>
+                <line x1="220" y1="70" x2="220" y2="140" stroke="#333" stroke-width="2"/>
+                <line x1="80" y1="140" x2="150" y2="170" stroke="#333" stroke-width="2"/>
+                <line x1="220" y1="140" x2="150" y2="170" stroke="#333" stroke-width="2"/>
+                <line x1="80" y1="70" x2="220" y2="140" stroke="#999" stroke-width="1" stroke-dasharray="4"/>
+                <circle cx="150" cy="50" r="18" fill="#4CAF50"/>
+                <text x="150" y="55" text-anchor="middle" font-size="12" fill="white">A</text>
+                <circle cx="80" cy="70" r="18" fill="#2196F3"/>
+                <text x="80" y="75" text-anchor="middle" font-size="12" fill="white">B</text>
+                <circle cx="220" cy="70" r="18" fill="#2196F3"/>
+                <text x="220" y="75" text-anchor="middle" font-size="12" fill="white">C</text>
+                <circle cx="80" cy="140" r="18" fill="#FF9800"/>
+                <text x="80" y="145" text-anchor="middle" font-size="12" fill="white">D</text>
+                <circle cx="220" cy="140" r="18" fill="#FF9800"/>
+                <text x="220" y="145" text-anchor="middle" font-size="12" fill="white">E</text>
+                <circle cx="150" cy="170" r="18" fill="#9C27B0"/>
+                <text x="150" y="175" text-anchor="middle" font-size="12" fill="white">F</text>
+            </svg>''',
+            'State Diagram': '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 150">
+                <rect fill="#f8f9fa" width="400" height="150"/>
+                <text x="200" y="20" text-anchor="middle" font-size="12" font-weight="bold">Process State Diagram</text>
+                <ellipse cx="60" cy="80" rx="35" ry="25" fill="#4CAF50"/>
+                <text x="60" y="85" text-anchor="middle" font-size="10" fill="white">New</text>
+                <ellipse cx="160" cy="80" rx="35" ry="25" fill="#2196F3"/>
+                <text x="160" y="85" text-anchor="middle" font-size="10" fill="white">Ready</text>
+                <ellipse cx="260" cy="80" rx="35" ry="25" fill="#FF9800"/>
+                <text x="260" y="85" text-anchor="middle" font-size="10" fill="white">Running</text>
+                <ellipse cx="360" cy="80" rx="35" ry="25" fill="#f44336"/>
+                <text x="360" y="85" text-anchor="middle" font-size="10" fill="white">Exit</text>
+                <ellipse cx="260" cy="130" rx="35" ry="20" fill="#9C27B0"/>
+                <text x="260" y="135" text-anchor="middle" font-size="9" fill="white">Waiting</text>
+                <path d="M95 80 L120 80" fill="none" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+                <path d="M195 80 L220 80" fill="none" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+                <path d="M295 80 L320 80" fill="none" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+                <path d="M260 105 L260 110" fill="none" stroke="#333" stroke-width="2"/>
+                <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#333"/></marker></defs>
+            </svg>''',
+            'ER Diagram': '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 180">
+                <rect fill="#f8f9fa" width="350" height="180"/>
+                <text x="175" y="20" text-anchor="middle" font-size="12" font-weight="bold">ER Diagram</text>
+                <rect x="30" y="60" width="80" height="40" fill="#4CAF50" rx="3"/>
+                <text x="70" y="85" text-anchor="middle" font-size="11" fill="white">Student</text>
+                <rect x="240" y="60" width="80" height="40" fill="#4CAF50" rx="3"/>
+                <text x="280" y="85" text-anchor="middle" font-size="11" fill="white">Course</text>
+                <polygon points="175,60 205,80 175,100 145,80" fill="#2196F3"/>
+                <text x="175" y="85" text-anchor="middle" font-size="9" fill="white">Enrolls</text>
+                <line x1="110" y1="80" x2="145" y2="80" stroke="#333" stroke-width="2"/>
+                <line x1="205" y1="80" x2="240" y2="80" stroke="#333" stroke-width="2"/>
+                <ellipse cx="70" cy="140" rx="30" ry="15" fill="#FFF" stroke="#333"/>
+                <text x="70" y="145" text-anchor="middle" font-size="9">ID</text>
+                <ellipse cx="70" cy="170" rx="30" ry="15" fill="#FFF" stroke="#333"/>
+                <text x="70" y="175" text-anchor="middle" font-size="9">Name</text>
+                <ellipse cx="280" cy="140" rx="35" ry="15" fill="#FFF" stroke="#333"/>
+                <text x="280" y="145" text-anchor="middle" font-size="9">Course_ID</text>
+                <line x1="70" y1="100" x2="70" y2="125" stroke="#333" stroke-width="1"/>
+                <line x1="70" y1="155" x2="70" y2="155" stroke="#333" stroke-width="1"/>
+                <line x1="280" y1="100" x2="280" y2="125" stroke="#333" stroke-width="1"/>
+            </svg>''',
+            'Flowchart': '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250">
+                <rect fill="#f8f9fa" width="200" height="250"/>
+                <text x="100" y="20" text-anchor="middle" font-size="12" font-weight="bold">Flowchart</text>
+                <ellipse cx="100" cy="45" rx="35" ry="15" fill="#4CAF50"/>
+                <text x="100" y="50" text-anchor="middle" font-size="10" fill="white">Start</text>
+                <rect x="60" y="75" width="80" height="30" fill="#2196F3" rx="3"/>
+                <text x="100" y="95" text-anchor="middle" font-size="10" fill="white">Process</text>
+                <polygon points="100,120 140,145 100,170 60,145" fill="#FF9800"/>
+                <text x="100" y="150" text-anchor="middle" font-size="9" fill="white">Decision</text>
+                <rect x="60" y="185" width="80" height="30" fill="#2196F3" rx="3"/>
+                <text x="100" y="205" text-anchor="middle" font-size="10" fill="white">Action</text>
+                <ellipse cx="100" cy="235" rx="35" ry="15" fill="#f44336"/>
+                <text x="100" y="240" text-anchor="middle" font-size="10" fill="white">End</text>
+                <line x1="100" y1="60" x2="100" y2="75" stroke="#333" stroke-width="2"/>
+                <line x1="100" y1="105" x2="100" y2="120" stroke="#333" stroke-width="2"/>
+                <line x1="100" y1="170" x2="100" y2="185" stroke="#333" stroke-width="2"/>
+                <line x1="100" y1="215" x2="100" y2="220" stroke="#333" stroke-width="2"/>
+            </svg>''',
+            'Table': '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150">
+                <rect fill="#f8f9fa" width="300" height="150"/>
+                <text x="150" y="20" text-anchor="middle" font-size="12" font-weight="bold">Data Table</text>
+                <rect x="30" y="35" width="240" height="25" fill="#4CAF50"/>
+                <text x="70" y="52" text-anchor="middle" font-size="10" fill="white">Process</text>
+                <text x="130" y="52" text-anchor="middle" font-size="10" fill="white">Burst</text>
+                <text x="190" y="52" text-anchor="middle" font-size="10" fill="white">Arrival</text>
+                <text x="250" y="52" text-anchor="middle" font-size="10" fill="white">Priority</text>
+                <rect x="30" y="60" width="240" height="80" fill="white" stroke="#ddd"/>
+                <line x1="30" y1="80" x2="270" y2="80" stroke="#ddd"/>
+                <line x1="30" y1="100" x2="270" y2="100" stroke="#ddd"/>
+                <line x1="30" y1="120" x2="270" y2="120" stroke="#ddd"/>
+                <line x1="100" y1="60" x2="100" y2="140" stroke="#ddd"/>
+                <line x1="160" y1="60" x2="160" y2="140" stroke="#ddd"/>
+                <line x1="220" y1="60" x2="220" y2="140" stroke="#ddd"/>
+                <text x="70" y="75" text-anchor="middle" font-size="10">P1</text>
+                <text x="130" y="75" text-anchor="middle" font-size="10">5</text>
+                <text x="190" y="75" text-anchor="middle" font-size="10">0</text>
+                <text x="250" y="75" text-anchor="middle" font-size="10">2</text>
+                <text x="70" y="95" text-anchor="middle" font-size="10">P2</text>
+                <text x="130" y="95" text-anchor="middle" font-size="10">3</text>
+                <text x="190" y="95" text-anchor="middle" font-size="10">1</text>
+                <text x="250" y="95" text-anchor="middle" font-size="10">1</text>
+            </svg>'''
+        }
+        
+        # Get matching template or create generic
+        svg = svg_templates.get(diagram_type)
+        if not svg:
+            # Generic diagram placeholder
+            svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150">
+                <rect fill="#f0f4f8" width="300" height="150" rx="8"/>
+                <rect x="10" y="10" width="280" height="130" fill="white" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="8,4" rx="5"/>
+                <text x="150" y="50" text-anchor="middle" font-size="14" font-weight="bold" fill="#4a5568">📐 {diagram_type}</text>
+                <text x="150" y="80" text-anchor="middle" font-size="10" fill="#718096">{description[:50]}...</text>
+                <text x="150" y="120" text-anchor="middle" font-size="9" fill="#a0aec0">[Diagram to be drawn by student]</text>
+            </svg>'''
+        
+        # Return as data URL
+        import base64
+        svg_bytes = svg.encode('utf-8')
+        b64 = base64.b64encode(svg_bytes).decode('utf-8')
+        data_url = f"data:image/svg+xml;base64,{b64}"
+        
+        return jsonify({"imageUrl": data_url, "diagramType": diagram_type})
+    
+    except Exception as e:
+        print(f"Error generating diagram: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
     api_key = os.environ.get('API_KEY')
     if api_key:
@@ -529,4 +949,10 @@ if __name__ == '__main__':
     
     port = int(os.environ.get('PORT', 5000))
     print(f"🚀 Starting server on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(
+        host='0.0.0.0', 
+        port=port, 
+        debug=True,
+        extra_files=[],
+        exclude_patterns=['**/WindowsApps/**', '**/.git/**', '**/node_modules/**']
+    )
